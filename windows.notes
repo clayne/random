@@ -1,0 +1,72 @@
+Windows:
+- Enable Remote Desktop
+- Disable real time protection (bad performance effects on random IO)
+- Disable behavior monitoring (part of RTP)
+- Disable process scanning (RTP)
+- Disable tamper protection (or else RTP will be-reenabled)
+- Configure automatic updates to 2: Notify before download/update
+- Set UAC notify to 'do not dim desktop'
+- Change 'feedback frequency' to 'none'
+- Disable xbox game bar
+- Use Windows (light) theme
+- Disable 'show animations in windows'
+- Disable animate windows on minimize/restore
+- Disable all fade optimizations
+- Disable slide open combo boxes
+- Disable smooth scroll list boxes
+- Change page file to 4GB-32GB or optionally disable entirely
+- Set local LAN and WIFI networks to private domain
+- Use 802.11n before 802.11ac or ax
+- Configure static IPv4 address
+- Disable IPv6
+- Disable bluetooth
+- Disable wake on LAN
+- Disable filesystem compression
+- Permit tcp/22 through firewall
+- Change sound scheme to 'no sounds'
+- Disable voice activation
+- Disable/remove OneDrive
+- Set taskbar to use small taskbar buttons
+- Set taskbar combine to 'never'
+- Disable taskbar peek
+- Disable taskbar search field
+- Disable taskbar news/interests section
+- Disable taskbar cortana button
+- Enable 'show most used apps' in start menu
+- Remove optional feature: IE11
+- Remove optional feature: Math Recognizer
+- Remove optional feature: Microsoft Quick Assist
+- Remove optional feature: Steps Recorder
+- Remove optional feature: Windows Fax and Scan
+- Remove optional feature: Windows Hello Face
+- Remove optional feature: Print Management Console
+- Add optional feature: Services for NFS
+- Add optional feature: Windows Subsystem for Linux
+- Expose hibernate option in power settings
+- Set monitor auto-shutoff to 2 hours
+- Set PC sleep to never
+- Set power button to sleep
+- Set focus assist to 'alarms only'
+- Disable 'Allow notifications to play sounds'
+- Disable 'Show me the windows welcome experience'
+- Disable 'Suggest ways I can finish setting up my device'
+- Disable 'Get tips, tricks, and suggestions as you use windows'
+- Disable 'Show suggestions in your timeline'
+- Disable 'Share across devices'
+- Disable Storage Sense
+- Enable hardware accelerated GPU scheduling
+- Disable 'autocorrect mispelled words' and other typing helpers
+- Max out keyboard repeat and reduce delay
+
+Software:
+- 7+ Taskbar Tweaker
+- Nvidia Geforce Experience
+- Nvidia Profile Inspector
+- HWInfo64
+- Notepad++
+- MSI Afterburner
+- Greenshot
+- Discord
+- Steam
+- Cygwin
+- Visual Studio
