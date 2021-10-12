@@ -40,6 +40,8 @@ Windows:
 - Remove optional feature: Windows Fax and Scan
 - Remove optional feature: Windows Hello Face
 - Remove optional feature: Print Management Console
+- Remove Paint3D and various other "3D" apps
+- Remove Feedback Hub
 - Add optional feature: Services for NFS
 - Add optional feature: Windows Subsystem for Linux
 - Expose hibernate option in power settings
@@ -57,6 +59,8 @@ Windows:
 - Enable hardware accelerated GPU scheduling
 - Disable 'autocorrect mispelled words' and other typing helpers
 - Max out keyboard repeat and reduce delay
+- Explorer: Show hidden folders, files, and drives
+- Explorer: Uncheck hide extensions for known file types
 
 Software:
 - 7+ Taskbar Tweaker
@@ -65,8 +69,30 @@ Software:
 - HWInfo64
 - Notepad++
 - MSI Afterburner
+- Precision X1 (bios/firmware updates)
 - Greenshot
 - Discord
 - Steam
 - Cygwin
+	.bashrc
+	.vimrc
+	/etc/sshd_config
+	/etc/bash.bash_logout
 - Visual Studio
+- 7zip
+- CPU-Z
+- GPU-Z
+- AutoHotkey
+- Git
+- AltSnap (AltDrag successor)
+
+- IDA
+- CheatEngine
+- Explorer Suite IV
+- Python 2.x
+- Python 3.x
+- Link Shell Extension
+- WireShark
+- Nvidia DDS Utilities
+- OBS Studio
+- RDP Wrapper
