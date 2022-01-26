@@ -333,7 +333,7 @@ sub main {
 
 		if ($alter_scanned) {
 			# randomly set some already scanned live objects to cleanable
-			for (my $i = 0; $i < $index_next && $i < scalar @$elements; $i++) {
+			for (my $i = $index_next_pre; $i < $index_next && $i < scalar @$elements; $i++) {
 				next if ($elements->[$i]->ref_count <= 1);
 				next if (rand(1) > $alter_scanned_chance / 100);
 				$elements->[$i]{'ref_count'}--;
