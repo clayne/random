@@ -106,7 +106,7 @@ sub struct_cleanup_v0 {
 	my $max_proc = $opts{'max_proc'} // 32;
 	my $gc = 0;
 
-	if ($$index_next > scalar @$elements) {
+	if ($$index_next >= scalar @$elements) {
 		$$index_next = scalar @$elements - 1;
 	}
 
