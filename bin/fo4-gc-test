@@ -1,0 +1,349 @@
+#!/usr/bin/perl
+
+# Basic testing script for Bethesda's busted Papyrus VM iterative GC.
+#
+# Per Nukem, `struct_cleanup_v0` is the method used by the vanilla game. It
+# unfortunately has a critical flaw where if the first index is to be GC'ed it
+# will process that index and that index only and then return. This is due to
+# its over-reliance on index positions being consistent even though the same
+# function modifies the array it's operating on (and does not increment the
+# working index in that case). A better approach is to guard against processing
+# no more than n elements of the array (v1) rather than worrying if the current
+# array index == starting index.
+#
+# To see an example of how the vanilla approach is problematic, run:
+#
+# $ fo4-gc-test --dead-chance=99 --max-cycles=100
+#
+# Then watch the algorithm return after the first GC-able element multiple
+# times in a row until it finally finds a live element which it can skip. This
+# results in the working index being advanced past the tracking index, hence
+# making the while condition true and allowing it to GC multiple elements
+# until either wrap-around to the tracking index or time runs out.
+
+package fo4_gc_test;
+
+use Getopt::Long qw(:config no_ignore_case no_auto_abbrev bundling);
+use Carp qw(confess);
+use Data::Dumper;
+use Pod::Usage;
+
+use strict;
+use warnings FATAL => qw(all);
+
+local $SIG{__DIE__} = \&confess;
+local $Data::Dumper::Sortkeys = 1;
+local $Data::Dumper::Useqq = 1;
+
+our $VERSION = '$Id$';
+
+my $verbose = 0;
+my $method = 'struct_cleanup_v0';
+my $method_tab = {
+	'struct_cleanup_v0' => \&struct_cleanup_v0,
+	'struct_cleanup_v1' => \&struct_cleanup_v1,
+};
+
+sub new {
+	my ($class, $rc) = @_;
+	return bless { id => int(rand(2**32)), ref_count => $rc || 1 }, $class;
+}
+
+use Class::XSAccessor (
+	accessors => { map +($_, $_), qw(ref_count) }
+);
+
+# bool CleanupStructs(float TimeBudget, BSTArray<BSTSmartPointer<BSScript::Struct>>& Elements, uint32_t& NextIndexToClean)
+# {
+#     bool didGC = false;
+#
+#     float startTime = BSPrecisionTimer::GetTimer();
+#     float budget = BSPrecisionTimer::fFrequencyMS * TimeBudget;
+#
+#     // NextIndexToClean stores the last checked entry for iterative GC purposes.
+#     if (NextIndexToClean >= Elements.QSize())
+#         NextIndexToClean = Elements.QSize() - 1;
+#
+#     uint32_t index = NextIndexToClean;
+#
+#     if (!Elements.QEmpty())
+#     {
+#         do
+#         {
+#             auto& element = Elements[index];
+#
+#             if (element->RefCount == 1)
+#             {
+#                 didGC = true;
+#                 Elements.RemoveIndex(index);
+#
+#                 if (!Elements.QEmpty() && NextIndexToClean >= Elements.QSize())
+#                     NextIndexToClean = Elements.QSize() - 1;
+#
+#                 // Note that 'index' isn't incremented when an entry is deleted. There's a chance that 'NextIndexToClean' == 'index' on the first loop.
+#             }
+#             else
+#             {
+#                 index++;
+#             }
+#
+#             if (index >= Elements.QSize())
+#                 index = 0;
+#
+#         } while (
+#             index != NextIndexToClean && // Break when 'index' == 'NextIndexToClean'. Refer to the previous note. This CAN exit after a single object is collected.
+#             !Elements.QEmpty() &&
+#             BSPrecisionTimer::GetTimer() - startTime <= budget);
+#     }
+#
+#     NextIndexToClean = index;
+#     return didGC;
+# }
+
+sub struct_cleanup_v0 {
+	my ($elements, $index_next, %opts) = @_;
+	my $min_proc = $opts{'min_proc'} // 8;
+	my $max_proc = $opts{'max_proc'} // 32;
+	my $gc = 0;
+
+	if ($$index_next > scalar @$elements) {
+		$$index_next = scalar @$elements - 1;
+	}
+
+	my $index = $$index_next;
+	return $gc unless (scalar @$elements);
+
+	# simulate variable time-cost within budget with a random amount of cycles
+	my $time_max = ($min_proc < $max_proc ? $min_proc : $max_proc)
+		     + ($max_proc > $min_proc ? int(rand($max_proc - $min_proc)) : 0);
+
+	do {
+		if ($verbose) {
+			printf STDERR ("size == %2d, index == %2d, index_next == %2d, time_max == %2d, will_gc == %d\n",
+				scalar @$elements, $index, $$index_next, $time_max, $elements->[$index]->ref_count <= 1);
+		}
+
+		my $elem = $elements->[$index];
+		if ($elem->ref_count == 1) {
+			splice(@$elements, $index, 1);
+			$elem->{'ref_count'}--;
+			$gc++;
+
+			if (scalar @$elements && $$index_next >= scalar @$elements) {
+				$$index_next = scalar @$elements - 1;
+			}
+
+			# do not advance index here as the array has shrunk
+			# and index now points to the previously next index
+		} else {
+			$index++;
+		}
+
+		# wrap around if necessary
+		if ($index >= scalar @$elements) {
+			$index = 0;
+		}
+	} while ($index != $$index_next && scalar @$elements && --$time_max > 0);
+
+	$$index_next = $index;
+
+	return $gc;
+}
+
+# bool CleanupStructs(float TimeBudget, BSTArray<BSTSmartPointer<BSScript::Struct>>& Elements, uint32_t& NextIndexToClean)
+# {
+#     bool didGC = false;
+#
+#     float startTime = BSPrecisionTimer::GetTimer();
+#     float budget = BSPrecisionTimer::fFrequencyMS * TimeBudget;
+#
+#     // NextIndexToClean stores the last checked entry for iterative GC purposes. If
+#     // it's beyond the size of the array, reset it to the start and go from there.
+#     uint32_t index = (NextIndexToClean < Elements.QSize() ? NextIndexToClean : 0);
+#
+#     // Examine no more elements than the array currently holds, regardless of position.
+#     // If no elements are cleaned this will not be more than a full wrap-around.
+#     uint32_t elem_max = Elements.QSize();
+#
+#     while (elem_max-- && !Elements.QEmpty() && BSPrecisionTimer::GetTimer() - startTime <= budget)
+#     {
+#         auto& element = Elements[index];
+#
+#         if (element->RefCount == 1)
+#         {
+#             Elements.RemoveIndex(index);
+#             didGC = true;
+#
+#             // do not advance index here as the array has shrunk
+#             // and index now points to the previously next index
+#         }
+#         else
+#         {
+#             index++;
+#         }
+#
+#         // wrap around if necessary
+#         if (index >= Elements.QSize())
+#             index = 0;
+#     }
+#
+#     NextIndexToClean = index;
+#
+#     return didGC;
+# }
+
+sub struct_cleanup_v1 {
+	my ($elements, $index_next, %opts) = @_;
+	my $min_proc = $opts{'min_proc'} // 8;
+	my $max_proc = $opts{'max_proc'} // 32;
+	my $gc = 0;
+
+	# if index-next is past the end of the array, reset to the start
+	my $index = $$index_next < scalar @$elements ? $$index_next : 0;
+
+	# simulate variable time-cost within budget with a random amount of cycles
+	my $time_max = ($min_proc < $max_proc ? $min_proc : $max_proc)
+		     + ($max_proc > $min_proc ? int(rand($max_proc - $min_proc)) : 0);
+
+	# do not process more than these many elements, regardless of index position
+	my $elem_max = scalar @$elements;
+
+	while ($elem_max-- && scalar @$elements && $time_max--) {
+		if ($verbose) {
+			printf STDERR ("size == %2d, index == %2d, elem_max == %2d, time_max == %2d, will_gc == %d\n",
+				scalar @$elements, $index, $elem_max, $time_max, $elements->[$index]->ref_count <= 1);
+		}
+
+		my $elem = $elements->[$index];
+		if ($elem->ref_count == 1) {
+			splice(@$elements, $index, 1);
+			$elem->{'ref_count'}--;
+			$gc++;
+
+			# do not advance index here as the array has shrunk
+			# and index now points to the previously next index
+		} else {
+			$index++;
+		}
+
+		# wrap around if necessary
+		if ($index >= scalar @$elements) {
+			$index = 0;
+		}
+	}
+
+	$$index_next = $index;
+
+	return $gc;
+}
+
+sub elements_dump {
+	my ($elements, $max_size, $pre, $pst, $gc) = @_;
+	my $element_count = scalar @$elements;
+
+	my @lout;
+	my $live_count = 0;
+	for (my $i = 0; $i < $element_count; $i++) {
+		push @lout, $elements->[$i]->ref_count == 1 ? '.' : '*';
+		$live_count++ if ($elements->[$i]->ref_count > 1);
+	}
+
+	my @iout = split('', ' ' x $max_size);
+	$iout[$pre] = '^' if (defined $pre);
+	$iout[$pst] = ($pst == $pre ? '>' : '$') if (defined $pst);
+
+	my @xout = split('', '0123456789' x ($max_size / 10));
+
+	printf STDERR ("%2s    |%*.*s|\n", ' ', $max_size, $element_count, join('', @xout));
+	printf STDERR ("%2d :: |%*.*s| live: %d, dead: %d\n", $element_count, $max_size, $max_size, join('', @lout), $live_count, $element_count - $live_count);
+	printf STDERR ("%2d :: |%*.*s|  idx: %d -> %d\n", $gc // 0, $max_size, $element_count, join('', @iout), $pre, $pst);
+	printf STDERR "\n";
+}
+
+sub elements_gen {
+	my ($max, $dead_chance) = @_;
+	my @tmp;
+
+	while ($max--) {
+		my $live = rand(1) > $dead_chance / 100 ? 1 : 0;
+		my $elem = __PACKAGE__->new(1 + $live);
+		push @tmp, $elem;
+	}
+
+	return @tmp;
+}
+
+sub main {
+	my $ret;
+	my $help = 0;
+	my $max_size = 80;
+	my $max_cycles = 20;
+	my $index_init = 0;
+	my $constant_fill = 0;
+	my $alter_scanned = 0;
+	my $alter_scanned_chance = 10;
+	my $dead_chance = 50;
+	my $min_proc = 8;
+	my $max_proc = 32;
+
+	local @ARGV = @_;
+	GetOptions(
+		'h|help' => \$help,
+		'verbose|v+' => \$verbose,
+		'max-size=i' => \$max_size,
+		'max-cycles=i' => \$max_cycles,
+		'init-index=i' => \$index_init,
+		'constant-fill+' => \$constant_fill,
+		'alter-scanned+' => \$alter_scanned,
+		'alter-scanned-chance=i' => \$alter_scanned_chance,
+		'dead-chance=i' => \$dead_chance,
+		'min-proc=i' => \$min_proc,
+		'max-proc=i' => \$max_proc,
+		'method=s' => \$method,
+	) && (!$help && ($ret = 1));
+
+	$ret || pod2usage(-verbose => 2, -noperldoc => 1, -exitval => -1);
+
+	# gc method to use
+	my $cb = $method_tab->{$method} || die "Unknown method";
+	my %cb_opts = (
+		min_proc => $min_proc,
+		max_proc => $max_proc,
+	);
+
+	# initial index
+	my $index_next = $index_init;
+
+	# initial propagation
+	my $elements = [ elements_gen($max_size, $dead_chance) ];
+
+	# dump initial layout
+	elements_dump($elements, $max_size, $index_next, $index_next, 0);
+
+	while ($max_cycles-- && grep +($_->ref_count <= 1), @$elements) {
+		my $index_next_pre = $index_next;
+		my $gc = $cb->($elements, \$index_next, %cb_opts);
+
+		if ($constant_fill) {
+			# fill in new objects to keep array a constant length
+			push @$elements, elements_gen($max_size - scalar @$elements, $dead_chance);
+		}
+
+		elements_dump($elements, $max_size, $index_next_pre, $index_next, $gc);
+
+		if ($alter_scanned) {
+			# randomly set some already scanned live objects to cleanable
+			for (my $i = 0; $i < $index_next && $i < scalar @$elements; $i++) {
+				next if ($elements->[$i]->ref_count <= 1);
+				next if (rand(1) > $alter_scanned_chance / 100);
+				$elements->[$i]{'ref_count'}--;
+			}
+		}
+	}
+
+	return 1;
+}
+
+exit !main(@ARGV) unless (caller);
+
+__END__
