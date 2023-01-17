@@ -61,6 +61,8 @@ Windows:
 - Max out keyboard repeat and reduce delay
 - Explorer: Show hidden folders, files, and drives
 - Explorer: Uncheck hide extensions for known file types
+- fsutil behavior set Disable8dot3 1
+- fsutil behavior set DisableLastAccess 1
 
 Software:
 - 7+ Taskbar Tweaker
@@ -85,7 +87,7 @@ Software:
 - AutoHotkey
 - Git
 - AltSnap (AltDrag successor)
-
+- Sysinternals Suite
 - IDA
 - CheatEngine
 - Explorer Suite IV
@@ -93,6 +95,8 @@ Software:
 - Python 3.x
 - Link Shell Extension
 - WireShark
-- Nvidia DDS Utilities
 - OBS Studio
 - RDP Wrapper
+- x64dbg
+
+- Nvidia DDS Utilities
